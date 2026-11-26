@@ -46,6 +46,8 @@ export function startRace(root) {
       <div class="stars">⭐ <b>0</b></div>
       <div class="progress"><i></i></div>
       <div class="speed"><b>0</b><small>km/h</small></div>
+      <button class="steer left" aria-label="Left"><svg viewBox="0 0 24 24"><path d="M15.5 4 7.5 12l8 8" /></svg></button>
+      <button class="steer right" aria-label="Right"><svg viewBox="0 0 24 24"><path d="M8.5 4l8 8-8 8" /></svg></button>
       <div class="driver"><img src="${photo("ridwan")}" alt=""><span>RIDWAN</span></div>
       <div class="fan mom"><div class="bubble"></div><img src="${photo("mom")}" alt=""><div class="poms"><span>🎉</span><span>🎊</span></div><div class="tag">Hooyo</div></div>
       <div class="fan dad"><div class="bubble"></div><img src="${photo("dad")}" alt=""><div class="poms"><span>👏</span><span>🏁</span></div><div class="tag">Aabbe</div></div>
@@ -434,6 +436,19 @@ export function startRace(root) {
     if (Math.abs(dx) > 30) move(dx < 0 ? -1 : 1);
     else move(e.clientX < root.clientWidth / 2 ? -1 : 1);
   });
+  // big ◀ ▶ buttons for thumbs (fires on touch-down, no delay)
+  root.querySelectorAll(".steer").forEach((b) => {
+    const dir = b.classList.contains("left") ? -1 : 1;
+    b.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      move(dir);
+      try { navigator.vibrate?.(12); } catch {}
+      b.classList.remove("press"); void b.offsetWidth; b.classList.add("press");
+    });
+  });
+  // pulse them in his first few races so he notices them
+  if (store.get("ridwan.races", 0) < 3) root.querySelectorAll(".steer").forEach((b) => b.classList.add("hint"));
+  store.set("ridwan.races", store.get("ridwan.races", 0) + 1);
   const onKey = (e) => { if (e.key === "ArrowLeft") move(-1); if (e.key === "ArrowRight") move(1); };
   window.addEventListener("keydown", onKey);
   targetBtn.addEventListener("click", () => { if (state === "riding" && target) sayAll(["ridwan_find", target.key]); });

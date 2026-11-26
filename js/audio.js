@@ -88,9 +88,14 @@ export async function say(key) {
       current.t = t;
       return;
     }
+    if (ctx.state !== "running") ctx.resume().catch(() => {});
     const src = ctx.createBufferSource();
     src.buffer = buf; src.connect(ctx.destination);
-    src.onended = () => { if (current === src) current = null; resolve(); };
+    let done = false;
+    const finish = () => { if (done) return; done = true; clearTimeout(safety); if (current === src) current = null; resolve(); };
+    // safety net: if the phone has paused audio (call, app switch…), don't wait forever
+    const safety = setTimeout(finish, buf.duration * 1000 + 600);
+    src.onended = finish;
     current = src;
     src.start();
   });

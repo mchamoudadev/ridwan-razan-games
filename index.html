@@ -183,6 +183,21 @@
   .rec .ph.set { outline: 3px solid #69db7c; }
   .rec .ph .rm { position: absolute; top: 2px; right: 2px; width: 26px; height: 26px; border-radius: 50%; background: #fa5252; color: #fff; font-size: 13px; display: none; }
   .rec .ph.set .rm { display: grid; place-items: center; }
+  /* thumb controls */
+  .race3d .steer { position: absolute; bottom: max(18px, env(safe-area-inset-bottom)); z-index: 5; width: 92px; height: 92px; border-radius: 50%;
+      background: rgba(255,255,255,.88); box-shadow: 0 6px 0 rgba(0,0,0,.22), 0 8px 18px rgba(0,0,0,.25); display: grid; place-items: center;
+      touch-action: none; -webkit-user-select: none; user-select: none; }
+  .race3d .steer.left { left: 16px; } .race3d .steer.right { right: 16px; }
+  .race3d .steer svg { width: 54px; height: 54px; fill: none; stroke: #1c7ed6; stroke-width: 3.6; stroke-linecap: round; stroke-linejoin: round; }
+  .race3d .steer.press { animation: steerPress .18s ease; }
+  @keyframes steerPress { 50% { transform: scale(.86); background: #ffd43b; } }
+  .race3d .steer.hint { animation: steerHint 1.4s ease-in-out infinite; }
+  .race3d .steer.hint.press { animation: steerPress .18s ease; }
+  @keyframes steerHint { 50% { transform: scale(1.08); box-shadow: 0 6px 0 rgba(0,0,0,.22), 0 0 0 10px rgba(255,212,59,.55); } }
+  /* make room: driver card + speed go to the top */
+  .race3d .driver { top: calc(max(10px, env(safe-area-inset-top)) + 56px); bottom: auto; left: 10px; }
+  .race3d .driver img { width: 58px; height: 58px; }
+  .race3d .speed { top: calc(max(10px, env(safe-area-inset-top)) + 52px); bottom: auto; font-size: 20px; padding: 4px 10px; }
   /* ---------- baby ---------- */
   .baby { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background .5s; overflow: hidden; }
   .baby .thing { line-height: 0; }
