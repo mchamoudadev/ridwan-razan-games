@@ -50,5 +50,11 @@ exitBtn.addEventListener("pointerdown", startHold);
 ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => exitBtn.addEventListener(ev, endHold));
 
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
-  navigator.serviceWorker.register("sw.js").catch(() => {});
+  // when a new version of the game is published, reload once so the phone shows it
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController && !reloaded && home && !home.classList.contains("hidden")) { reloaded = true; location.reload(); }
+  });
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
 }

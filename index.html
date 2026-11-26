@@ -198,6 +198,7 @@
   .race3d .driver { top: calc(max(10px, env(safe-area-inset-top)) + 56px); bottom: auto; left: 10px; }
   .race3d .driver img { width: 58px; height: 58px; }
   .race3d .speed { top: calc(max(10px, env(safe-area-inset-top)) + 52px); bottom: auto; font-size: 20px; padding: 4px 10px; }
+  #ver { position: absolute; bottom: max(6px, env(safe-area-inset-bottom)); right: 10px; font-size: 11px; color: rgba(255,255,255,.75); font-weight: 700; }
   /* ---------- baby ---------- */
   .baby { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background .5s; overflow: hidden; }
   .baby .thing { line-height: 0; }
@@ -218,6 +219,7 @@
       <button class="kid r" data-kid="ridwan"><img class="av" data-photo="ridwan" alt=""><span class="nm">Ridwan</span></button>
       <button class="kid z" data-kid="razan"><img class="av" data-photo="razan" alt=""><span class="nm">Razan</span></button>
     </div>
+    <div id="ver">v17</div>
     <button id="recbtn" aria-label="Record family voices (hold)">🎙️ <span>Qoyska · photos & voices · hold</span></button>
   </main>
   <div id="game" class="hidden"></div>

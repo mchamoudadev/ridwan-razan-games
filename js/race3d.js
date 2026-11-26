@@ -5,8 +5,9 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { LETTERS } from "./letters.js";
-import { photo } from "./photos.js";
+import { photo, hasPhoto } from "./photos.js";
 import { sayAll, sfx, preload, preloadSounds, stopVoice } from "./audio.js";
 
 const START_POOL = 3, UNLOCK_EVERY = 3, ROUND_GOAL = 12;
@@ -223,7 +224,14 @@ export function startRace(root) {
       res();
     }, undefined, () => res());
   };
-  motoModel = makeMotorbike(motoPaint);
+  // Detailed motorbike (Innerscene "Adventure motorcycle", CC0). 910 parts → merged per material for phones,
+  // keeping each wheel separate so it can spin. Ridwan rides it.
+  const motoReady = new Promise((res) => {
+    loader.load("models/motorcycle.glb", (g) => {
+      try { motoModel = buildRealMoto(g.scene, motoPaint); } catch (e) { console.warn(e); motoModel = makeMotorbike(motoPaint); }
+      res();
+    }, undefined, () => { motoModel = makeMotorbike(motoPaint); res(); });
+  });
 
 
   function useVehicle(v) {
@@ -233,6 +241,7 @@ export function startRace(root) {
     if (m) player.add(m);
     wheels = [];
     if (m?.userData.wheelNames) wheels = m.userData.wheelNames.map((n) => m.getObjectByName(n)).filter(Boolean);
+    else if (m?.userData.wheelPivots) { wheels = []; m.traverse((o) => { if (o.name === "wheel-pivot") wheels.push(o); }); }
     else m?.traverse((o) => { if (/wheel/.test(o.name)) wheels.push(o); });
   }
 
@@ -456,8 +465,9 @@ export function startRace(root) {
 
   // ------------------------------------------------------------------ main loop
   let alive = true, last = performance.now();
-  const CAM_Y = 3.2, CAM_Z = 7.6;
-  const camPos = new THREE.Vector3(0, CAM_Y, CAM_Z), camLook = new THREE.Vector3();
+  // the motorbike is much smaller than the car, so the camera comes closer for it
+  const camY = () => (vehicle === "moto" ? 2.35 : 3.2), camZ = () => (vehicle === "moto" ? 5.0 : 7.6);
+  const camPos = new THREE.Vector3(0, 3.2, 7.6), camLook = new THREE.Vector3();
   function frame(now) {
     if (!alive) return;
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -485,7 +495,7 @@ export function startRace(root) {
     player.rotation.z = lean;
     player.rotation.y = -vx * 0.025;
     player.position.y = Math.sin(now / 95) * 0.02 + (boost > 0 ? 0.03 : 0);
-    for (const w of wheels) w.rotation.x -= speed * dt * 2.2;
+    for (const w of wheels) { if (w.name === "wheel-pivot") w.rotation.z += speed * dt * 2.6 * (vehicle === "moto" ? 1 : 0); else w.rotation.x -= speed * dt * 2.2; }
 
     sun.position.set(px - 8, 16, 6); sun.target.position.set(px, 0, -4);
 
@@ -539,11 +549,11 @@ export function startRace(root) {
       if (!introHold) introT = Math.min(1, introT + dt / 2.2);
       const e = 1 - Math.pow(1 - introT, 3);
       const ang = lerp(Math.PI * 0.95, 0, e);           // orbit from the front to behind
-      const r = lerp(5.6, CAM_Z, e);
-      camPos.set(px + Math.sin(ang) * r, lerp(1.4, CAM_Y, e), Math.cos(ang) * r);
+      const r = lerp(vehicle === "moto" ? 3.6 : 5.6, camZ(), e);
+      camPos.set(px + Math.sin(ang) * r, lerp(1.4, camY(), e), Math.cos(ang) * r);
       camLook.set(px, lerp(1.1, 1.0, e), lerp(0, -8, e));
     } else {
-      camPos.set(lerp(camPos.x, px * 0.55, dt * 4), CAM_Y, CAM_Z);
+      camPos.set(lerp(camPos.x, px * 0.55, dt * 4), lerp(camPos.y, camY(), dt * 3), lerp(camPos.z, camZ(), dt * 3));
       camLook.set(px * 0.75, 1.0, -8);
     }
     camera.position.copy(camPos);
@@ -602,12 +612,12 @@ export function startRace(root) {
     "mom_go_1", "mom_go_2", "mom_go_3", "mom_right_1", "mom_right_2", "mom_miss",
     ...LETTERS.map((l) => l.key),
   ]);
-  carReady.then(() => { if (state === "choosing" || state === "intro") useVehicle(vehicle); });
+  Promise.all([carReady, motoReady]).then(() => { if (state === "choosing" || state === "intro" || state === "painting") useVehicle(vehicle); });
   useVehicle(vehicle);
   (async () => {
     const v = await chooseVehicle();
     if (!alive) return;
-    await carReady;
+    await Promise.all([carReady, motoReady]);
     useVehicle(v);
     await chooseColor();
     if (!alive) return;
@@ -721,15 +731,109 @@ function makeDriver(s = 1) {
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.35, 6, 12), suit); body.position.y = 0.32;
   const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 18), mat(0xf76707, { roughness: 0.25, metalness: 0.1 }));
   helmet.position.y = 0.92;
-  const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.035, 8, 30, Math.PI), mat(0xffffff));
-  stripe.position.y = 0.92; stripe.rotation.y = Math.PI / 2;
+  // racing stripe over the top and down the back (not across the face)
+  const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.035, 8, 30, Math.PI * 0.55), mat(0xffffff));
+  stripe.position.y = 0.92; stripe.rotation.set(0, Math.PI / 2, Math.PI * 0.45);
   const visor = new THREE.Mesh(new THREE.SphereGeometry(0.305, 20, 12, -0.9, 1.8, 1.1, 0.75), mat(0x1b1f24, { roughness: 0.1, metalness: 0.6 }));
-  visor.position.y = 0.92; visor.rotation.y = Math.PI; // faces forward (-Z)
+  visor.position.y = 0.92; visor.rotation.y = -Math.PI / 2; // the segment is built around -X; turn it to face forward (-Z)
+  // his face in the helmet opening (seen when the camera looks at him from the front)
+  if (hasPhoto("ridwan")) {
+    const faceTex = new THREE.TextureLoader().load(photo("ridwan")); faceTex.colorSpace = THREE.SRGBColorSpace;
+    const face = new THREE.Mesh(new THREE.CircleGeometry(0.2, 32), new THREE.MeshBasicMaterial({ map: faceTex }));
+    face.position.set(0, 0.9, -0.305); face.rotation.y = Math.PI; // faces -Z
+    g.add(face);
+  }
   const badge = new THREE.Mesh(new THREE.CircleGeometry(0.11, 20), mat(0xffd43b));
   badge.position.set(0, 0.42, 0.285); // on his back, toward the camera
   g.add(body, helmet, stripe, visor, badge);
   g.scale.setScalar(s);
   return shadowAll(g);
+}
+
+/** Turn the detailed CC0 motorbike into a few merged meshes, front toward -Z, wheels spinnable, Ridwan on the seat. */
+function buildRealMoto(src, paint) {
+  src.updateMatrixWorld(true);
+  const groups = { front: new Map(), rear: new Map(), body: new Map() };
+  const mats = new Map();
+  let seatBox = null; const grips = [];
+  src.traverse((o) => {
+    if (!o.isMesh) return;
+    const name = o.name || o.parent?.name || "";
+    if (/saddle/i.test(name)) seatBox = new THREE.Box3().setFromObject(o);
+    if (/handlebar rubber grip/i.test(name)) grips.push(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()));
+    const part = /^front (crossed spoke|bearing hub|rounded tyre|turned rim)/i.test(name) ? "front"
+      : /^rear (crossed spoke|bearing hub|rounded tyre|turned rim)/i.test(name) ? "rear" : "body";
+    const m = o.material;
+    if (!mats.has(m.name)) mats.set(m.name, m);
+    const geo = o.geometry.clone().applyMatrix4(o.matrixWorld);
+    for (const k of Object.keys(geo.attributes)) if (!["position", "normal", "uv"].includes(k)) geo.deleteAttribute(k);
+    if (!geo.attributes.uv) geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+    const list = groups[part].get(m.name) || []; list.push(geo.index ? geo.toNonIndexed() : geo); groups[part].set(m.name, list);
+  });
+  // phone-friendly materials: his chosen colour on the paintwork, no expensive glass refraction
+  const fix = (name, m) => {
+    if (/teal enamel paint/i.test(name)) return paint;
+    const c = m.clone();
+    if (c.transmission) { c.transmission = 0; c.transparent = true; c.opacity = 0.45; }
+    return c;
+  };
+  const out = new THREE.Group();
+  const build = (part) => {
+    const g = new THREE.Group();
+    for (const [name, geos] of groups[part]) {
+      const merged = mergeGeometries(geos, false);
+      if (!merged) continue;
+      const mesh = new THREE.Mesh(merged, fix(name, mats.get(name)));
+      mesh.castShadow = true; g.add(mesh);
+    }
+    return g;
+  };
+  const body = build("body"), front = build("front"), rear = build("rear");
+  // spin each wheel around its own axle (the model is long along X, wide along Z → axle = Z)
+  for (const w of [front, rear]) {
+    const c = new THREE.Box3().setFromObject(w).getCenter(new THREE.Vector3());
+    w.children.forEach((m) => m.geometry.translate(-c.x, -c.y, -c.z));
+    const pivot = new THREE.Group(); pivot.name = "wheel-pivot"; pivot.position.copy(c); pivot.add(w);
+    out.add(pivot);
+  }
+  out.add(body);
+  // Ridwan on the seat, leaning toward the handlebars
+  if (seatBox) {
+    const seat = seatBox.getCenter(new THREE.Vector3()); seat.y = seatBox.max.y;
+    const frontX = new THREE.Box3().setFromObject(front).getCenter(new THREE.Vector3()).x;
+    const fwd = Math.sign(frontX) || 1;
+    const rider = makeDriver(0.8);
+    rider.position.set(seat.x - fwd * 0.05, seat.y - 0.12, 0);
+    rider.rotation.y = fwd > 0 ? -Math.PI / 2 : Math.PI / 2; // face the front of the bike
+    rider.rotateX(-0.45);
+    out.add(rider);
+    // arms to the handlebar grips, legs down to the foot pegs
+    const sleeve = mat(0x1c7ed6), jeans = mat(0x364fc7);
+    const shoulderY = seat.y + 0.52, shoulderX = seat.x + fwd * 0.12;
+    for (const g of grips) {
+      const sh = new THREE.Vector3(shoulderX, shoulderY, Math.sign(g.z) * 0.2);
+      out.add(limb(sh, g, 0.06, sleeve));
+      const glove = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), mat(0x212529)); glove.position.copy(g); out.add(glove);
+    }
+    for (const sz of [-1, 1]) {
+      const hip = new THREE.Vector3(seat.x, seat.y + 0.05, sz * 0.17), knee = new THREE.Vector3(seat.x + fwd * 0.28, seat.y - 0.12, sz * 0.26);
+      const foot = new THREE.Vector3(seat.x + fwd * 0.12, seat.y - 0.5, sz * 0.24);
+      out.add(limb(hip, knee, 0.08, jeans), limb(knee, foot, 0.07, jeans));
+    }
+    // front of the bike toward -Z (rotating +90° about Y sends +X to -Z)
+    out.rotation.y = fwd > 0 ? Math.PI / 2 : -Math.PI / 2;
+  }
+  const wrap = new THREE.Group(); wrap.add(out); wrap.scale.setScalar(1.15);
+  wrap.userData.wheelPivots = true;
+  return wrap;
+}
+function limb(a, b, r, material) {
+  const len = a.distanceTo(b);
+  const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, Math.max(0.01, len - r * 2), 4, 8), material);
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+  m.castShadow = true;
+  return m;
 }
 
 /** A sporty motorbike with Ridwan riding it, built from simple shapes (front = -Z). */
