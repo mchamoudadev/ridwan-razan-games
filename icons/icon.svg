@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#ffb703"/>
+  <circle cx="256" cy="256" r="190" fill="#fff"/>
+  <text x="256" y="300" font-size="210" text-anchor="middle" font-family="Geeza Pro, Arial" font-weight="bold" fill="#1864ab">ب</text>
+  <text x="256" y="420" font-size="64" text-anchor="middle" font-family="Arial Rounded MT Bold, Arial" fill="#e03131">R &amp; R</text>
+</svg>
